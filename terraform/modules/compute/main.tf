@@ -58,6 +58,11 @@ resource "aws_instance" "public" {
     http_tokens   = "required"
   }
 
+  root_block_device {
+    encrypted             = true
+    delete_on_termination = true
+  }
+
   tags = {
     Name = "${var.project_name}-public-ec2"
   }
@@ -75,6 +80,11 @@ resource "aws_instance" "private" {
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = "required"
+  }
+
+  root_block_device {
+    encrypted             = true
+    delete_on_termination = true
   }
 
   tags = {
