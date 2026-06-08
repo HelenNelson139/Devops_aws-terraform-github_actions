@@ -8,6 +8,11 @@ variable "vpc_id" {
   type        = string
 }
 
+variable "vpc_cidr" {
+  description = "CIDR block of the VPC, used for internal DNS egress rules."
+  type        = string
+}
+
 variable "allowed_ssh_cidr" {
   description = "CIDR allowed to SSH to the public EC2 instance."
   type        = string

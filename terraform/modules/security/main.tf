@@ -13,11 +13,27 @@ resource "aws_security_group" "public_ec2" {
   }
 
   egress {
-    description = "Outbound access"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "HTTPS outbound for package updates and SSM"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "DNS UDP to VPC resolver"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    description = "DNS TCP to VPC resolver"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
   }
 
   tags = {
@@ -40,11 +56,27 @@ resource "aws_security_group" "private_ec2" {
   }
 
   egress {
-    description = "Outbound access"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "HTTPS outbound through NAT for package updates and SSM"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "DNS UDP to VPC resolver"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    description = "DNS TCP to VPC resolver"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
   }
 
   tags = {
