@@ -53,6 +53,11 @@ resource "aws_instance" "public" {
   vpc_security_group_ids      = [var.public_security_group_id]
   associate_public_ip_address = true
 
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
+
   tags = {
     Name = "${var.project_name}-public-ec2"
   }
@@ -66,6 +71,11 @@ resource "aws_instance" "private" {
   subnet_id                   = var.private_subnet_id
   vpc_security_group_ids      = [var.private_security_group_id]
   associate_public_ip_address = false
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
 
   tags = {
     Name = "${var.project_name}-private-ec2"
