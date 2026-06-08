@@ -65,6 +65,10 @@ resource "aws_instance" "public" {
     delete_on_termination = true
   }
 
+  lifecycle {
+    ignore_changes = [associate_public_ip_address]
+  }
+
   tags = {
     Name = "${var.project_name}-public-ec2"
   }

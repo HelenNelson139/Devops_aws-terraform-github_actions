@@ -21,6 +21,14 @@ resource "aws_security_group" "public_ec2" {
   }
 
   egress {
+    description = "SSH outbound to private EC2 in the VPC"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
     description = "DNS UDP to VPC resolver"
     from_port   = 53
     to_port     = 53
