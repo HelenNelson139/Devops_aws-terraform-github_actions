@@ -1,0 +1,52 @@
+name: Deploy Docker Compose service
+description: Deploy one Docker Compose service to a remote Docker host over SSH.
+
+inputs:
+  service-name:
+    description: Docker Compose service name.
+    required: true
+  deploy-host:
+    description: Remote Docker host.
+    required: false
+    default: ""
+  deploy-user:
+    description: SSH user for the remote Docker host.
+    required: false
+    default: ""
+  deploy-ssh-key:
+    description: Private SSH key used to connect to the remote Docker host.
+    required: false
+    default: ""
+  deploy-path:
+    description: Repository path on the remote Docker host.
+    required: false
+    default: "~/mood-journal"
+
+runs:
+  using: composite
+  steps:
+    - name: Deploy selected service
+      shell: bash
+      env:
+        SERVICE_NAME: ${{ inputs.service-name }}
+        DEPLOY_HOST: ${{ inputs.deploy-host }}
+        DEPLOY_USER: ${{ inputs.deploy-user }}
+        DEPLOY_SSH_KEY: ${{ inputs.deploy-ssh-key }}
+        DEPLOY_PATH: ${{ inputs.deploy-path }}
+      run: |
+        if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_SSH_KEY" ]; then
+          echo "Remote Docker host secrets are not configured. Skipping remote deployment."
+          exit 0
+        fi
+
+        if [ -z "$DEPLOY_PATH" ]; then
+          DEPLOY_PATH="/home/$DEPLOY_USER/mood-journal"
+        fi
+
+        mkdir -p ~/.ssh
+        printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+        ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+          "cd '$DEPLOY_PATH' && git pull --ff-only && docker compose -f microservices/docker-compose.yml up -d --build '$SERVICE_NAME'"

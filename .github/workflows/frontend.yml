@@ -1,0 +1,163 @@
+name: Frontend CI/CD
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "microservices/frontend/**"
+      - "microservices/kubernetes/frontend.yaml"
+      - "microservices/kubernetes/namespace.yaml"
+      - ".github/actions/**"
+      - ".github/workflows/frontend.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "microservices/frontend/**"
+      - "microservices/kubernetes/frontend.yaml"
+      - "microservices/kubernetes/namespace.yaml"
+      - ".github/actions/**"
+      - ".github/workflows/frontend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+  packages: write
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SERVICE_NAME: frontend
+  IMAGE_NAME: mood-frontend
+  SERVICE_DIR: microservices/frontend
+
+jobs:
+  validate-build-scan:
+    name: Validate, Build and Scan Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      image-ref: ${{ steps.build-image.outputs.image-ref }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Validate frontend files
+        run: |
+          test -s microservices/frontend/public/index.html
+          test -s microservices/frontend/admin/index.html
+          test -s microservices/frontend/public/styles.css
+          test -s microservices/frontend/nginx.conf
+
+      - name: Run SonarQube scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ] || [ -z "$SONAR_HOST_URL" ]; then
+            echo "SonarQube secrets are not configured. Skipping SonarQube scan."
+            exit 0
+          fi
+
+          docker run --rm \
+            -e SONAR_HOST_URL="$SONAR_HOST_URL" \
+            -e SONAR_TOKEN="$SONAR_TOKEN" \
+            -v "$PWD/microservices/frontend:/usr/src" \
+            sonarsource/sonar-scanner-cli:11 \
+            -Dsonar.projectKey=mood-frontend \
+            -Dsonar.projectName="Mood Frontend" \
+            -Dsonar.sources=public,admin,nginx.conf
+
+      - name: Build Docker image
+        id: build-image
+        run: |
+          image_registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          image_ref="${image_registry}/${IMAGE_NAME}:${GITHUB_SHA}"
+
+          docker build \
+            -t "${IMAGE_NAME}:${GITHUB_SHA}" \
+            -t "${image_ref}" \
+            "${SERVICE_DIR}"
+
+          echo "image-ref=${image_ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Scan Docker image with Trivy
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.58.2 image \
+            --format table \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --vuln-type os,library \
+            --severity CRITICAL,HIGH \
+            "${IMAGE_NAME}:${GITHUB_SHA}"
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Docker image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker push "${{ steps.build-image.outputs.image-ref }}"
+
+  deploy:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: validate-build-scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Deploy Docker Compose service
+        uses: ./.github/actions/deploy-compose-service
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        with:
+          service-name: frontend
+          deploy-host: ${{ env.DEPLOY_HOST }}
+          deploy-user: ${{ env.DEPLOY_USER }}
+          deploy-ssh-key: ${{ env.DEPLOY_SSH_KEY }}
+          deploy-path: ${{ env.DEPLOY_PATH }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Deploy frontend to Kubernetes
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+          IMAGE_REF: ${{ needs.validate-build-scan.outputs.image-ref }}
+        run: |
+          if [ -z "$KUBE_CONFIG_B64" ]; then
+            echo "Kubernetes kubeconfig is not configured. Skipping Kubernetes deployment."
+            exit 0
+          fi
+
+          mkdir -p ~/.kube
+          printf '%s' "$KUBE_CONFIG_B64" | base64 --decode > ~/.kube/config
+          kubectl apply -f microservices/kubernetes
+          kubectl set image deployment/mood-frontend frontend="$IMAGE_REF" -n mood-journal
+          kubectl rollout status deployment/mood-frontend -n mood-journal
+
+      - name: Register deployment
+        uses: ./.github/actions/register-deployment
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          environment: frontend
+          environment-url: http://localhost:8080
+          description: Frontend CI/CD completed successfully.
