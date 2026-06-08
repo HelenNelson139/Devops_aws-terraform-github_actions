@@ -46,12 +46,14 @@ resource "aws_iam_instance_profile" "ec2" {
 
 resource "aws_instance" "public" {
   ami                         = data.aws_ami.amazon_linux.id
+  ebs_optimized               = true
   instance_type               = var.instance_type
   iam_instance_profile        = aws_iam_instance_profile.ec2.name
   key_name                    = var.key_name
+  monitoring                  = true
   subnet_id                   = var.public_subnet_id
   vpc_security_group_ids      = [var.public_security_group_id]
-  associate_public_ip_address = true
+  associate_public_ip_address = false
 
   metadata_options {
     http_endpoint = "enabled"
@@ -70,9 +72,11 @@ resource "aws_instance" "public" {
 
 resource "aws_instance" "private" {
   ami                         = data.aws_ami.amazon_linux.id
+  ebs_optimized               = true
   instance_type               = var.instance_type
   iam_instance_profile        = aws_iam_instance_profile.ec2.name
   key_name                    = var.key_name
+  monitoring                  = true
   subnet_id                   = var.private_subnet_id
   vpc_security_group_ids      = [var.private_security_group_id]
   associate_public_ip_address = false
