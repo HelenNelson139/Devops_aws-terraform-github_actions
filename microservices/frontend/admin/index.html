@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin - Mood Journal</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <header class="admin-header">
+        <div>
+          <p class="eyebrow">Mood Journal Admin</p>
+          <h1>Quản lý hệ thống</h1>
+        </div>
+        <button id="refresh-button" type="button">Làm mới</button>
+      </header>
+
+      <section class="admin-grid">
+        <section class="admin-panel">
+          <h2>Nội dung người dùng đã gửi</h2>
+          <div id="reflection-list" class="data-list"></div>
+        </section>
+
+        <section class="admin-panel">
+          <h2>Thông điệp random</h2>
+          <form id="message-form" class="admin-form">
+            <label for="message-content">Thêm thông điệp mới</label>
+            <textarea id="message-content" name="content" rows="4" maxlength="500" required></textarea>
+            <button type="submit">Thêm</button>
+          </form>
+          <div id="message-list" class="data-list"></div>
+        </section>
+      </section>
+
+      <p id="admin-error" class="error" role="alert"></p>
+    </main>
+
+    <script>
+      const reflectionList = document.querySelector('#reflection-list');
+      const messageList = document.querySelector('#message-list');
+      const messageForm = document.querySelector('#message-form');
+      const refreshButton = document.querySelector('#refresh-button');
+      const errorBox = document.querySelector('#admin-error');
+
+      function setError(message) {
+        errorBox.textContent = message || '';
+      }
+
+      function formatDate(value) {
+        return new Intl.DateTimeFormat('vi-VN', {
+          dateStyle: 'medium',
+          timeStyle: 'short'
+        }).format(new Date(value));
+      }
+
+      async function requestJson(url, options = {}) {
+        const response = await fetch(url, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(options.headers || {})
+          }
+        });
+
+        if (response.status === 204) {
+          return null;
+        }
+
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body.message || 'Không thể xử lý yêu cầu.');
+        }
+
+        return body;
+      }
+
+      function renderReflections(reflections) {
+        if (reflections.length === 0) {
+          reflectionList.innerHTML = '<p class="empty-state">Chưa có nội dung nào.</p>';
+          return;
+        }
+
+        reflectionList.innerHTML = reflections.map((item) => `
+          <article class="data-item">
+            <div class="item-heading">
+              <strong>${item.displayName || 'Chưa nhập tên'}</strong>
+              <span>${formatDate(item.createdAt)}</span>
+            </div>
+            <p>${item.reflectionText}</p>
+            <small>${item.positiveMessage || 'Chưa nhận thông điệp từ hệ thống.'}</small>
+          </article>
+        `).join('');
+      }
+
+      function renderMessages(messages) {
+        if (messages.length === 0) {
+          messageList.innerHTML = '<p class="empty-state">Chưa có thông điệp random.</p>';
+          return;
+        }
+
+        messageList.innerHTML = messages.map((item) => `
+          <article class="data-item message-row">
+            <p>${item.content}</p>
+            <button type="button" data-message-id="${item.id}">Xóa</button>
+          </article>
+        `).join('');
+      }
+
+      async function loadDashboard() {
+        setError('');
+        const [reflectionData, messageData] = await Promise.all([
+          requestJson('/api/admin/reflections'),
+          requestJson('/api/admin/messages')
+        ]);
+
+        renderReflections(reflectionData.reflections);
+        renderMessages(messageData.messages);
+      }
+
+      messageForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setError('');
+
+        try {
+          const content = new FormData(messageForm).get('content');
+          await requestJson('/api/admin/messages', {
+            method: 'POST',
+            body: JSON.stringify({ content })
+          });
+          messageForm.reset();
+          await loadDashboard();
+        } catch (error) {
+          setError(error.message);
+        }
+      });
+
+      messageList.addEventListener('click', async (event) => {
+        const button = event.target.closest('button[data-message-id]');
+        if (!button) {
+          return;
+        }
+
+        setError('');
+        try {
+          await requestJson(`/api/admin/messages/${button.dataset.messageId}`, {
+            method: 'DELETE'
+          });
+          await loadDashboard();
+        } catch (error) {
+          setError(error.message);
+        }
+      });
+
+      refreshButton.addEventListener('click', () => {
+        loadDashboard().catch((error) => setError(error.message));
+      });
+
+      loadDashboard().catch((error) => setError(error.message));
+    </script>
+  </body>
+</html>

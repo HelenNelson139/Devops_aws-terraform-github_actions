@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mood-message-service
+  namespace: mood-journal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mood-message-service
+  template:
+    metadata:
+      labels:
+        app: mood-message-service
+    spec:
+      containers:
+        - name: message-service
+          image: ghcr.io/replace-me/mood-message-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3001
+          env:
+            - name: PORT
+              value: "3001"
+            - name: DATABASE_URL
+              value: postgres://mood_user:mood_password@postgres:5432/mood_journal
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: message-service
+  namespace: mood-journal
+spec:
+  selector:
+    app: mood-message-service
+  ports:
+    - name: http
+      port: 3001
+      targetPort: 3001

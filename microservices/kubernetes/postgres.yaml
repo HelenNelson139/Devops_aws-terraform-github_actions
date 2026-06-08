@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mood-postgres-secret
+  namespace: mood-journal
+type: Opaque
+stringData:
+  POSTGRES_DB: mood_journal
+  POSTGRES_USER: mood_user
+  POSTGRES_PASSWORD: mood_password
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mood-postgres-data
+  namespace: mood-journal
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mood-postgres
+  namespace: mood-journal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mood-postgres
+  template:
+    metadata:
+      labels:
+        app: mood-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: mood-postgres-secret
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: mood-postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: mood-journal
+spec:
+  selector:
+    app: mood-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

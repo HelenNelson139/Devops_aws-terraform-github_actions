@@ -1,0 +1,89 @@
+﻿<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hôm nay của cậu thế nào?</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="mood-panel" aria-live="polite">
+        <p class="eyebrow">Mood Journal</p>
+        <h1>Hôm nay của cậu thế nào?</h1>
+
+        <form id="reflection-form" class="form-section">
+          <label for="reflectionText">Viết vài dòng về ngày hôm nay của cậu</label>
+          <textarea id="reflectionText" name="reflectionText" rows="6" maxlength="1000" required></textarea>
+          <button type="submit">Gửi</button>
+        </form>
+
+        <form id="name-form" class="form-section hidden">
+          <label for="displayName">Tên của cậu là gì?</label>
+          <input id="displayName" name="displayName" maxlength="100" autocomplete="name" required />
+          <button type="submit">Nhận thông điệp</button>
+        </form>
+
+        <section id="result" class="result hidden"></section>
+        <p id="error" class="error" role="alert"></p>
+      </section>
+    </main>
+
+    <script>
+      const reflectionForm = document.querySelector('#reflection-form');
+      const nameForm = document.querySelector('#name-form');
+      const result = document.querySelector('#result');
+      const errorBox = document.querySelector('#error');
+      let reflectionId = null;
+
+      function setError(message) {
+        errorBox.textContent = message || '';
+      }
+
+      reflectionForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setError('');
+
+        const reflectionText = new FormData(reflectionForm).get('reflectionText');
+        const response = await fetch('/api/reflections', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reflectionText })
+        });
+
+        const body = await response.json();
+        if (!response.ok) {
+          setError(body.message);
+          return;
+        }
+
+        reflectionId = body.id;
+        reflectionForm.classList.add('hidden');
+        nameForm.classList.remove('hidden');
+        document.querySelector('#displayName').focus();
+      });
+
+      nameForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setError('');
+
+        const displayName = new FormData(nameForm).get('displayName');
+        const response = await fetch(`/api/reflections/${reflectionId}/name`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ displayName })
+        });
+
+        const body = await response.json();
+        if (!response.ok) {
+          setError(body.message);
+          return;
+        }
+
+        nameForm.classList.add('hidden');
+        result.classList.remove('hidden');
+        result.textContent = body.message;
+      });
+    </script>
+  </body>
+</html>
