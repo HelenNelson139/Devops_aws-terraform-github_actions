@@ -13,11 +13,42 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
+resource "aws_iam_role" "ec2" {
+  name = "${var.project_name}-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-ec2-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2" {
+  name = "${var.project_name}-ec2-profile"
+  role = aws_iam_role.ec2.name
+}
+
 resource "aws_instance" "public" {
-  #checkov:skip=CKV2_AWS_41: AWS Academy lab does not allow creating or attaching custom IAM instance profiles.
   ami                         = data.aws_ami.amazon_linux.id
   ebs_optimized               = true
   instance_type               = var.instance_type
+  iam_instance_profile        = aws_iam_instance_profile.ec2.name
   key_name                    = var.key_name
   monitoring                  = true
   subnet_id                   = var.public_subnet_id
@@ -40,10 +71,10 @@ resource "aws_instance" "public" {
 }
 
 resource "aws_instance" "private" {
-  #checkov:skip=CKV2_AWS_41: AWS Academy lab does not allow creating or attaching custom IAM instance profiles.
   ami                         = data.aws_ami.amazon_linux.id
   ebs_optimized               = true
   instance_type               = var.instance_type
+  iam_instance_profile        = aws_iam_instance_profile.ec2.name
   key_name                    = var.key_name
   monitoring                  = true
   subnet_id                   = var.private_subnet_id
