@@ -1,0 +1,17 @@
+{
+  "name": "api-service",
+  "version": "1.0.0",
+  "description": "Mood journal API service with PostgreSQL persistence",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "jest --runInBand"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mood-postgres
+    environment:
+      POSTGRES_DB: mood_journal
+      POSTGRES_USER: mood_user
+      POSTGRES_PASSWORD: mood_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - mood_postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mood_user -d mood_journal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  message-service:
+    build:
+      context: ./message-service
+    container_name: mood-message-service
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgres://mood_user:mood_password@postgres:5432/mood_journal
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "src/healthcheck.js"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-service:
+    build:
+      context: ./api-service
+    container_name: mood-api-service
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://mood_user:mood_password@postgres:5432/mood_journal
+      MESSAGE_SERVICE_URL: http://message-service:3001
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      message-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: mood-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      api-service:
+        condition: service_healthy
+
+volumes:
+  mood_postgres_data:
